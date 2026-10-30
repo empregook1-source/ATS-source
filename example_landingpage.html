@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emprego OK — onde empreendedores encontram colaboradores</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0d0f14;
+    --bg: #f5f3ee;
+    --cream: #faf8f3;
+    --accent: #e8500a;
+    --accent-2: #1a6b4a;
+    --gold: #c9a84c;
+    --mid: #6b6860;
+    --light-border: rgba(13,15,20,0.1);
+    --card-bg: #ffffff;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+
+  /* NOISE TEXTURE */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.2rem 4rem;
+    background: rgba(245,243,238,0.88);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--light-border);
+    transition: padding .3s;
+  }
+
+  .nav-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+  }
+
+  .nav-logo .ok-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: #fff;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    padding: .15em .45em;
+    border-radius: 4px;
+    vertical-align: middle;
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 2.5rem;
+    list-style: none;
+  }
+
+  .nav-links a {
+    font-size: .9rem;
+    font-weight: 500;
+    color: var(--mid);
+    text-decoration: none;
+    letter-spacing: .01em;
+    transition: color .2s;
+  }
+
+  .nav-links a:hover { color: var(--ink); }
+
+  .nav-cta {
+    background: var(--ink);
+    color: #fff !important;
+    padding: .6rem 1.4rem;
+    border-radius: 100px;
+    font-weight: 500 !important;
+    transition: background .2s, transform .2s !important;
+  }
+
+  .nav-cta:hover { background: var(--accent) !important; transform: translateY(-1px); }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 8rem 4rem 5rem;
+    gap: 4rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    right: -10%;
+    top: -10%;
+    width: 70%;
+    height: 120%;
+    background: radial-gradient(ellipse at 60% 40%, #e8f4ec 0%, transparent 65%),
+                radial-gradient(ellipse at 90% 80%, #fdeee6 0%, transparent 55%);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .hero-content { position: relative; z-index: 1; }
+
+  .hero-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .78rem;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    border: 1px solid rgba(26,107,74,0.3);
+    padding: .4rem 1rem;
+    border-radius: 100px;
+    margin-bottom: 1.8rem;
+    background: rgba(26,107,74,0.06);
+    opacity: 0;
+    animation: fadeUp .6s .1s forwards;
+  }
+
+  .hero-tag::before {
+    content: '';
+    width: 7px; height: 7px;
+    background: var(--accent-2);
+    border-radius: 50%;
+  }
+
+  .hero-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(3rem, 5.5vw, 5.5rem);
+    font-weight: 800;
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fadeUp .7s .25s forwards;
+  }
+
+  .hero-title em {
+    font-style: normal;
+    color: var(--accent);
+    position: relative;
+    display: inline-block;
+  }
+
+  .hero-title em::after {
+    content: '';
+    position: absolute;
+    bottom: 4px; left: 0; right: 0;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    transform: scaleX(0);
+    transform-origin: left;
+    animation: lineGrow .5s 1s forwards;
+  }
+
+  .hero-subtitle {
+    font-size: 1.15rem;
+    color: var(--mid);
+    line-height: 1.7;
+    max-width: 480px;
+    margin-bottom: 2.5rem;
+    font-weight: 300;
+    opacity: 0;
+    animation: fadeUp .7s .4s forwards;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    opacity: 0;
+    animation: fadeUp .7s .55s forwards;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: .6rem;
+    background: var(--ink);
+    color: #fff;
+    font-family: 'DM Sans', sans-serif;
+    font-size: .95rem;
+    font-weight: 500;
+    padding: .9rem 2rem;
+    border-radius: 100px;
+    text-decoration: none;
+    transition: background .2s, transform .2s, box-shadow .2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .btn-primary:hover {
+    background: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(232,80,10,0.3);
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: .6rem;
+    background: transparent;
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    font-size: .95rem;
+    font-weight: 500;
+    padding: .9rem 2rem;
+    border-radius: 100px;
+    text-decoration: none;
+    border: 1.5px solid var(--light-border);
+    transition: border-color .2s, transform .2s, background .2s;
+    cursor: pointer;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--ink);
+    background: rgba(13,15,20,0.04);
+    transform: translateY(-2px);
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 2.5rem;
+    margin-top: 3.5rem;
+    padding-top: 2.5rem;
+    border-top: 1px solid var(--light-border);
+    opacity: 0;
+    animation: fadeUp .7s .7s forwards;
+  }
+
+  .stat-item { display: flex; flex-direction: column; }
+
+  .stat-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .stat-num span { color: var(--accent); }
+
+  .stat-label {
+    font-size: .8rem;
+    color: var(--mid);
+    margin-top: .3rem;
+    font-weight: 400;
+  }
+
+  /* HERO VISUAL */
+  .hero-visual {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    opacity: 0;
+    animation: fadeIn 1s .8s forwards;
+  }
+
+  .job-card {
+    background: var(--card-bg);
+    border: 1px solid rgba(13,15,20,0.07);
+    border-radius: 16px;
+    padding: 1.4rem 1.6rem;
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    box-shadow: 0 4px 20px rgba(13,15,20,0.06);
+    transition: transform .3s, box-shadow .3s;
+    cursor: pointer;
+  }
+
+  .job-card:hover {
+    transform: translateX(-6px);
+    box-shadow: 0 12px 40px rgba(13,15,20,0.12);
+  }
+
+  .job-card:nth-child(2) { margin-left: 2.5rem; }
+  .job-card:nth-child(3) { margin-left: 1rem; }
+
+  .job-icon {
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+  }
+
+  .job-icon.green { background: #e4f4ec; }
+  .job-icon.orange { background: #fdeee6; }
+  .job-icon.blue { background: #e6eef8; }
+
+  .job-info { flex: 1; }
+
+  .job-title-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: .95rem;
+    letter-spacing: -.01em;
+    margin-bottom: .2rem;
+  }
+
+  .job-meta {
+    font-size: .8rem;
+    color: var(--mid);
+    display: flex;
+    gap: .8rem;
+    align-items: center;
+  }
+
+  .job-meta .dot { width: 4px; height: 4px; background: var(--mid); border-radius: 50%; }
+
+  .job-badge {
+    font-size: .7rem;
+    font-weight: 600;
+    padding: .25em .7em;
+    border-radius: 100px;
+    letter-spacing: .04em;
+  }
+
+  .badge-new { background: #e4f4ec; color: var(--accent-2); }
+  .badge-hot { background: #fdeee6; color: var(--accent); }
+  .badge-remote { background: #e6eef8; color: #1a4db5; }
+
+  .floating-tag {
+    position: absolute;
+    background: var(--card-bg);
+    border: 1px solid var(--light-border);
+    border-radius: 100px;
+    padding: .5rem 1.1rem;
+    font-size: .82rem;
+    font-weight: 500;
+    box-shadow: 0 4px 16px rgba(13,15,20,0.08);
+    white-space: nowrap;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .floating-tag.t1 { top: -1rem; right: 1rem; animation-delay: 0s; }
+  .floating-tag.t2 { bottom: 2rem; right: -1rem; animation-delay: 1.5s; }
+
+  /* ── SEARCH BAR ── */
+  .search-section {
+    background: var(--ink);
+    padding: 3.5rem 4rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .search-section::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 30% 50%, rgba(232,80,10,0.15) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(26,107,74,0.12) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .search-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .search-label {
+    font-size: .85rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: block;
+  }
+
+  .search-bar {
+    display: flex;
+    background: rgba(255,255,255,0.07);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    transition: border-color .3s;
+  }
+
+  .search-bar:focus-within { border-color: rgba(255,255,255,0.35); }
+
+  .search-group {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 1.1rem 1.5rem;
+    gap: .8rem;
+    border-right: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .search-group svg { color: rgba(255,255,255,0.4); flex-shrink: 0; }
+
+  .search-group input {
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-family: 'DM Sans', sans-serif;
+    font-size: .95rem;
+    width: 100%;
+  }
+
+  .search-group input::placeholder { color: rgba(255,255,255,0.35); }
+
+  .search-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 1rem 2rem;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: .9rem;
+    letter-spacing: .02em;
+    cursor: pointer;
+    transition: background .2s;
+    white-space: nowrap;
+  }
+
+  .search-btn:hover { background: #d44308; }
+
+  .search-tags {
+    display: flex;
+    gap: .7rem;
+    margin-top: 1.2rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .search-tags span {
+    font-size: .78rem;
+    color: rgba(255,255,255,0.4);
+    font-weight: 500;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+
+  .tag-pill {
+    font-size: .8rem;
+    color: rgba(255,255,255,0.65);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: .3em .9em;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+
+  .tag-pill:hover {
+    color: #fff;
+    border-color: rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.07);
+  }
+
+  /* ── SECTION COMMON ── */
+  section { padding: 6rem 4rem; }
+
+  .section-header { margin-bottom: 3.5rem; }
+
+  .section-label {
+    display: inline-block;
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: .8rem;
+  }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2rem, 3.5vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    max-width: 580px;
+  }
+
+  .section-desc {
+    color: var(--mid);
+    font-size: 1rem;
+    line-height: 1.7;
+    margin-top: 1rem;
+    max-width: 520px;
+    font-weight: 300;
+  }
+
+  /* ── SERVICES ── */
+  .services { background: var(--cream); }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+
+  .service-card {
+    background: var(--card-bg);
+    border: 1px solid var(--light-border);
+    border-radius: 20px;
+    padding: 2.2rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform .3s, box-shadow .3s;
+  }
+
+  .service-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform .4s;
+  }
+
+  .service-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 50px rgba(13,15,20,0.1);
+  }
+
+  .service-card:hover::before { transform: scaleX(1); }
+
+  .service-icon {
+    width: 54px; height: 54px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    background: var(--bg);
+  }
+
+  .service-card h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: -.02em;
+    margin-bottom: .7rem;
+  }
+
+  .service-card p {
+    font-size: .9rem;
+    color: var(--mid);
+    line-height: 1.65;
+    font-weight: 300;
+  }
+
+  .service-link {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    margin-top: 1.2rem;
+    font-size: .85rem;
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+    letter-spacing: .02em;
+    transition: gap .2s, color .2s;
+  }
+
+  .service-link:hover { gap: .7rem; color: var(--accent); }
+
+  /* ── FEATURED JOBS ── */
+  .jobs { background: var(--bg); }
+
+  .jobs-header { display: flex; justify-content: space-between; align-items: flex-end; }
+
+  .jobs-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.2rem;
+    margin-top: 2.5rem;
+  }
+
+  .job-listing {
+    background: var(--card-bg);
+    border: 1px solid var(--light-border);
+    border-radius: 16px;
+    padding: 1.6rem 1.8rem;
+    display: flex;
+    align-items: center;
+    gap: 1.4rem;
+    transition: transform .3s, box-shadow .3s, border-color .3s;
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--ink);
+  }
+
+  .job-listing:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 40px rgba(13,15,20,0.09);
+    border-color: rgba(13,15,20,0.2);
+  }
+
+  .company-logo {
+    width: 52px; height: 52px;
+    border-radius: 13px;
+    background: var(--bg);
+    border: 1px solid var(--light-border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+  }
+
+  .job-listing-info { flex: 1; min-width: 0; }
+
+  .job-listing-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: -.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .job-listing-meta {
+    display: flex;
+    gap: .8rem;
+    align-items: center;
+    margin-top: .35rem;
+    font-size: .82rem;
+    color: var(--mid);
+    flex-wrap: wrap;
+  }
+
+  .salary-tag {
+    font-weight: 600;
+    color: var(--accent-2);
+    font-size: .82rem;
+  }
+
+  /* ── HOW IT WORKS ── */
+  .how-it-works { background: var(--ink); color: #fff; }
+
+  .how-it-works .section-title { color: #fff; }
+  .how-it-works .section-label { color: var(--gold); }
+  .how-it-works .section-desc { color: rgba(255,255,255,0.5); }
+
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+    margin-top: 3.5rem;
+    position: relative;
+  }
+
+  .steps-grid::before {
+    content: '';
+    position: absolute;
+    top: 2.5rem;
+    left: 8%;
+    right: 8%;
+    height: 1px;
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.1) 20%, rgba(255,255,255,0.1) 80%, transparent);
+    pointer-events: none;
+  }
+
+  .step {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    position: relative;
+  }
+
+  .step-num {
+    width: 52px; height: 52px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--gold);
+  }
+
+  .step h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -.02em;
+  }
+
+  .step p {
+    font-size: .88rem;
+    color: rgba(255,255,255,0.45);
+    line-height: 1.6;
+    font-weight: 300;
+  }
+
+  /* ── TESTIMONIALS ── */
+  .testimonials { background: var(--cream); }
+
+  .testimonials-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .testimonial-card {
+    background: var(--card-bg);
+    border: 1px solid var(--light-border);
+    border-radius: 20px;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    transition: transform .3s;
+  }
+
+  .testimonial-card:hover { transform: translateY(-4px); }
+  .testimonial-card.featured { background: var(--ink); }
+
+  .stars { color: var(--gold); font-size: 1rem; letter-spacing: .1em; }
+
+  .testimonial-text {
+    font-size: .95rem;
+    line-height: 1.7;
+    font-weight: 300;
+  }
+
+  .featured .testimonial-text { color: rgba(255,255,255,0.8); }
+
+  .testimonial-author {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    margin-top: auto;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--light-border);
+  }
+
+  .featured .testimonial-author { border-top-color: rgba(255,255,255,0.1); }
+
+  .avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    border: 2px solid var(--light-border);
+  }
+
+  .author-name {
+    font-weight: 600;
+    font-size: .9rem;
+  }
+
+  .featured .author-name { color: #fff; }
+
+  .author-role {
+    font-size: .78rem;
+    color: var(--mid);
+    font-weight: 300;
+  }
+
+  .featured .author-role { color: rgba(255,255,255,0.4); }
+
+  /* ── CTA STRIP ── */
+  .cta-strip {
+    background: var(--accent);
+    padding: 4rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .cta-strip h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.6rem, 3vw, 2.5rem);
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -.03em;
+    line-height: 1.1;
+    max-width: 500px;
+  }
+
+  .cta-strip-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+  .btn-white {
+    background: #fff;
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: .95rem;
+    padding: .9rem 2rem;
+    border-radius: 100px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: transform .2s, box-shadow .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+  }
+
+  .btn-white:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  }
+
+  .btn-outline-white {
+    background: transparent;
+    color: #fff;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: .95rem;
+    padding: .9rem 2rem;
+    border-radius: 100px;
+    text-decoration: none;
+    border: 2px solid rgba(255,255,255,0.4);
+    cursor: pointer;
+    transition: all .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+  }
+
+  .btn-outline-white:hover {
+    border-color: #fff;
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-2px);
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    background: var(--ink);
+    color: rgba(255,255,255,0.55);
+    padding: 5rem 4rem 2.5rem;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr 1fr;
+    gap: 3rem;
+    margin-bottom: 4rem;
+  }
+
+  .footer-brand .nav-logo {
+    color: #fff;
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+  }
+
+  .footer-brand p {
+    font-size: .88rem;
+    line-height: 1.7;
+    font-weight: 300;
+    max-width: 260px;
+  }
+
+  .footer-socials {
+    display: flex;
+    gap: .7rem;
+    margin-top: 1.5rem;
+  }
+
+  .social-icon {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .9rem;
+    text-decoration: none;
+    color: rgba(255,255,255,0.55);
+    transition: all .2s;
+  }
+
+  .social-icon:hover {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    transform: translateY(-2px);
+  }
+
+  .footer-col h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: .88rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    margin-bottom: 1.3rem;
+  }
+
+  .footer-col ul { list-style: none; }
+
+  .footer-col ul li + li { margin-top: .7rem; }
+
+  .footer-col ul li a {
+    font-size: .88rem;
+    color: rgba(255,255,255,0.45);
+    text-decoration: none;
+    font-weight: 300;
+    transition: color .2s;
+  }
+
+  .footer-col ul li a:hover { color: #fff; }
+
+  .footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 2rem;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: .82rem;
+    font-weight: 300;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .footer-bottom a { color: rgba(255,255,255,0.4); text-decoration: none; }
+  .footer-bottom a:hover { color: #fff; }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes lineGrow {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-8px); }
+  }
+
+  /* Intersection observer reveals */
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity .6s, transform .6s;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 1024px) {
+    .hero, nav, section, .search-section, .cta-strip, footer { padding-left: 2rem; padding-right: 2rem; }
+    .hero { grid-template-columns: 1fr; padding-top: 8rem; padding-bottom: 4rem; }
+    .hero-visual { display: none; }
+    .services-grid { grid-template-columns: repeat(2, 1fr); }
+    .steps-grid { grid-template-columns: repeat(2, 1fr); }
+    .steps-grid::before { display: none; }
+    .footer-grid { grid-template-columns: 1fr 1fr; }
+    .testimonials-grid { grid-template-columns: 1fr; }
+    .jobs-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 640px) {
+    nav { padding: 1rem 1.5rem; }
+    .nav-links { display: none; }
+    .services-grid { grid-template-columns: 1fr; }
+    .footer-grid { grid-template-columns: 1fr; }
+    .search-bar { flex-direction: column; border-radius: 14px; }
+    .search-group { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .search-btn { border-radius: 0 0 12px 12px; padding: 1rem; }
+    .cta-strip { flex-direction: column; text-align: center; }
+    .footer-bottom { flex-direction: column; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">Emprego <span class="ok-badge">OK</span></a>
+  <ul class="nav-links">
+    <li><a href="#vagas">Vagas</a></li>
+    <li><a href="#servicos">Serviços</a></li>
+    <li><a href="#empresas">Para Empresas</a></li>
+    <li><a href="#sobre">Sobre Nós</a></li>
+    <li><a href="#contato" class="nav-cta">Cadastre-se</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-tag">Mais de 500 vagas disponíveis hoje</div>
+    <h1 class="hero-title">Sua próxima<br><em>oportunidade</em><br>começa aqui.</h1>
+    <p class="hero-subtitle">Conectamos profissionais qualificados às melhores empresas do mercado. Rápido, gratuito e eficiente — do currículo à contratação.</p>
+    <div class="hero-actions">
+      <a href="#vagas" class="btn-primary">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Buscar Vagas
+      </a>
+      <a href="#empresas" class="btn-secondary">
+        Sou Empresa
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <span class="stat-num">12<span>k+</span></span>
+        <span class="stat-label">Candidatos cadastrados</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">850<span>+</span></span>
+        <span class="stat-label">Empresas parceiras</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">94<span>%</span></span>
+        <span class="stat-label">Taxa de satisfação</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-visual">
+    <div class="floating-tag t1">🎯 Match perfeito encontrado!</div>
+    <div class="job-card">
+      <div class="job-icon green">💻</div>
+      <div class="job-info">
+        <div class="job-title-text">Desenvolvedor Full Stack</div>
+        <div class="job-meta">
+          <span>TechNova · Belém, PA</span>
+          <span class="dot"></span>
+          <span>CLT</span>
+        </div>
+      </div>
+      <span class="job-badge badge-new">NOVA</span>
+    </div>
+    <div class="job-card">
+      <div class="job-icon orange">📊</div>
+      <div class="job-info">
+        <div class="job-title-text">Analista de Marketing Digital</div>
+        <div class="job-meta">
+          <span>Grupo Pará · Remoto</span>
+          <span class="dot"></span>
+          <span>PJ</span>
+        </div>
+      </div>
+      <span class="job-badge badge-remote">REMOTO</span>
+    </div>
+    <div class="job-card">
+      <div class="job-icon blue">🏥</div>
+      <div class="job-info">
+        <div class="job-title-text">Técnico de Enfermagem</div>
+        <div class="job-meta">
+          <span>Hospital Regional · Ananindeua</span>
+          <span class="dot"></span>
+          <span>CLT</span>
+        </div>
+      </div>
+      <span class="job-badge badge-hot">URGENTE</span>
+    </div>
+    <div class="floating-tag t2">✅ 38 vagas em Belém hoje</div>
+  </div>
+</section>
+
+<!-- SEARCH -->
+<div class="search-section">
+  <div class="search-inner">
+    <span class="search-label">🔍 Encontre sua vaga ideal</span>
+    <div class="search-bar">
+      <div class="search-group">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" placeholder="Cargo, área ou palavra-chave...">
+      </div>
+      <div class="search-group" style="flex: 0.6;">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <input type="text" placeholder="Cidade ou estado...">
+      </div>
+      <button class="search-btn">Buscar Vagas</button>
+    </div>
+    <div class="search-tags">
+      <span>Em alta:</span>
+      <span class="tag-pill">Tecnologia</span>
+      <span class="tag-pill">Saúde</span>
+      <span class="tag-pill">Administrativo</span>
+      <span class="tag-pill">Vendas</span>
+      <span class="tag-pill">Logística</span>
+      <span class="tag-pill">Engenharia</span>
+    </div>
+  </div>
+</div>
+
+<!-- SERVICES -->
+<section class="services" id="servicos">
+  <div class="section-header reveal">
+    <span class="section-label">O que oferecemos</span>
+    <h2 class="section-title">Soluções completas em Recursos Humanos</h2>
+    <p class="section-desc">Do recrutamento à recolocação, apoiamos empresas e candidatos em cada etapa da jornada profissional.</p>
+  </div>
+  <div class="services-grid">
+    <div class="service-card reveal">
+      <div class="service-icon">🎯</div>
+      <h3>Recrutamento & Seleção</h3>
+      <p>Processo seletivo completo com triagem técnica, entrevistas e avaliação comportamental para encontrar o profissional ideal.</p>
+      <a href="#" class="service-link">Saiba mais →</a>
+    </div>
+    <div class="service-card reveal" style="transition-delay:.1s">
+      <div class="service-icon">⚡</div>
+      <h3>Trabalho Temporário</h3>
+      <p>Contratação ágil para demandas sazonais, projetos especiais ou substituições com toda a segurança trabalhista garantida.</p>
+      <a href="#" class="service-link">Saiba mais →</a>
+    </div>
+    <div class="service-card reveal" style="transition-delay:.2s">
+      <div class="service-icon">🔍</div>
+      <h3>Headhunting Executivo</h3>
+      <p>Caça-talentos especializado para posições de liderança e cargos estratégicos com confidencialidade total no processo.</p>
+      <a href="#" class="service-link">Saiba mais →</a>
+    </div>
+    <div class="service-card reveal" style="transition-delay:.3s">
+      <div class="service-icon">📋</div>
+      <h3>Terceirização de RH</h3>
+      <p>Gestão completa da folha, benefícios e processos de RH para que você foque no core do seu negócio.</p>
+      <a href="#" class="service-link">Saiba mais →</a>
+    </div>
+    <div class="service-card reveal" style="transition-delay:.4s">
+      <div class="service-icon">🎓</div>
+      <h3>Treinamento Profissional</h3>
+      <p>Capacitação de equipes com módulos customizados de hard e soft skills para elevar a performance organizacional.</p>
+      <a href="#" class="service-link">Saiba mais →</a>
+    </div>
+    <div class="service-card reveal" style="transition-delay:.5s">
+      <div class="service-icon">🔄</div>
+      <h3>Recolocação Profissional</h3>
+      <p>Apoio completo para candidatos em transição de carreira: currículo, entrevistas e mapeamento de oportunidades.</p>
+      <a href="#" class="service-link">Saiba mais →</a>
+    </div>
+  </div>
+</section>
+
+<!-- JOBS -->
+<section class="jobs" id="vagas">
+  <div class="jobs-header reveal">
+    <div class="section-header" style="margin-bottom:0">
+      <span class="section-label">Oportunidades em destaque</span>
+      <h2 class="section-title">Vagas abertas agora</h2>
+    </div>
+    <a href="#" class="btn-secondary" style="flex-shrink:0">Ver todas as vagas →</a>
+  </div>
+  <div class="jobs-grid">
+    <a class="job-listing reveal" href="#" style="transition-delay:.05s">
+      <div class="company-logo">🏢</div>
+      <div class="job-listing-info">
+        <div class="job-listing-title">Assistente Administrativo</div>
+        <div class="job-listing-meta">
+          <span>Construtora Pará</span>
+          <span class="dot" style="width:4px;height:4px;background:var(--mid);border-radius:50%;display:inline-block"></span>
+          <span>Belém, PA · CLT</span>
+          <span class="salary-tag">R$ 1.800 – 2.200</span>
+        </div>
+      </div>
+      <span class="job-badge badge-new">NOVA</span>
+    </a>
+    <a class="job-listing reveal" href="#" style="transition-delay:.1s">
+      <div class="company-logo">🛒</div>
+      <div class="job-listing-info">
+        <div class="job-listing-title">Supervisor de Vendas</div>
+        <div class="job-listing-meta">
+          <span>Rede Varejo Norte</span>
+          <span class="dot" style="width:4px;height:4px;background:var(--mid);border-radius:50%;display:inline-block"></span>
+          <span>Ananindeua · CLT</span>
+          <span class="salary-tag">R$ 3.500 – 4.500</span>
+        </div>
+      </div>
+      <span class="job-badge badge-hot">URGENTE</span>
+    </a>
+    <a class="job-listing reveal" href="#" style="transition-delay:.15s">
+      <div class="company-logo">💊</div>
+      <div class="job-listing-info">
+        <div class="job-listing-title">Farmacêutico Responsável</div>
+        <div class="job-listing-meta">
+          <span>Rede Saúde Pará</span>
+          <span class="dot" style="width:4px;height:4px;background:var(--mid);border-radius:50%;display:inline-block"></span>
+          <span>Marabá, PA · CLT</span>
+          <span class="salary-tag">R$ 5.000 – 6.500</span>
+        </div>
+      </div>
+      <span class="job-badge badge-new">NOVA</span>
+    </a>
+    <a class="job-listing reveal" href="#" style="transition-delay:.2s">
+      <div class="company-logo">🚚</div>
+      <div class="job-listing-info">
+        <div class="job-listing-title">Motorista de Carga (Cat. E)</div>
+        <div class="job-listing-meta">
+          <span>TransLog Amazônia</span>
+          <span class="dot" style="width:4px;height:4px;background:var(--mid);border-radius:50%;display:inline-block"></span>
+          <span>Belém, PA · CLT</span>
+          <span class="salary-tag">R$ 3.200 – 3.800</span>
+        </div>
+      </div>
+      <span class="job-badge badge-hot">URGENTE</span>
+    </a>
+    <a class="job-listing reveal" href="#" style="transition-delay:.25s">
+      <div class="company-logo">💻</div>
+      <div class="job-listing-info">
+        <div class="job-listing-title">Analista de TI / Suporte N2</div>
+        <div class="job-listing-meta">
+          <span>Fintech Amazônica</span>
+          <span class="dot" style="width:4px;height:4px;background:var(--mid);border-radius:50%;display:inline-block"></span>
+          <span>Remoto · PJ</span>
+          <span class="salary-tag">R$ 4.000 – 5.500</span>
+        </div>
+      </div>
+      <span class="job-badge badge-remote">REMOTO</span>
+    </a>
+    <a class="job-listing reveal" href="#" style="transition-delay:.3s">
+      <div class="company-logo">🏗️</div>
+      <div class="job-listing-info">
+        <div class="job-listing-title">Engenheiro Civil Pleno</div>
+        <div class="job-listing-meta">
+          <span>Construtora Horizonte</span>
+          <span class="dot" style="width:4px;height:4px;background:var(--mid);border-radius:50%;display:inline-block"></span>
+          <span>Santarém, PA · CLT</span>
+          <span class="salary-tag">R$ 7.000 – 9.000</span>
+        </div>
+      </div>
+      <span class="job-badge badge-new">NOVA</span>
+    </a>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-it-works">
+  <div class="section-header reveal">
+    <span class="section-label">Como funciona</span>
+    <h2 class="section-title">Do cadastro à contratação em 4 passos</h2>
+    <p class="section-desc">Nosso processo é simples, rápido e totalmente gratuito para candidatos.</p>
+  </div>
+  <div class="steps-grid">
+    <div class="step reveal" style="transition-delay:.05s">
+      <div class="step-num">01</div>
+      <h3>Crie seu perfil</h3>
+      <p>Cadastre-se gratuitamente, faça upload do seu currículo e preencha seu perfil profissional em minutos.</p>
+    </div>
+    <div class="step reveal" style="transition-delay:.15s">
+      <div class="step-num">02</div>
+      <h3>Explore as vagas</h3>
+      <p>Navegue por centenas de oportunidades filtradas por área, salário, localidade e tipo de contrato.</p>
+    </div>
+    <div class="step reveal" style="transition-delay:.25s">
+      <div class="step-num">03</div>
+      <h3>Candidate-se</h3>
+      <p>Envie sua candidatura com um clique. Nossa equipe avalia o match e entra em contato rapidamente.</p>
+    </div>
+    <div class="step reveal" style="transition-delay:.35s">
+      <div class="step-num">04</div>
+      <h3>Seja contratado</h3>
+      <p>Participe do processo seletivo com nosso suporte e dê o próximo passo na sua carreira.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testimonials" id="sobre">
+  <div class="section-header reveal">
+    <span class="section-label">Depoimentos</span>
+    <h2 class="section-title">Histórias reais de sucesso</h2>
+    <p class="section-desc">Veja o que candidatos e empresas parceiras dizem sobre a Emprego OK.</p>
+  </div>
+  <div class="testimonials-grid">
+    <div class="testimonial-card featured reveal">
+      <div class="stars">★★★★★</div>
+      <p class="testimonial-text">"Em menos de duas semanas após cadastrar meu currículo, fui chamada para uma entrevista e contratada como analista. A equipe da Emprego OK foi incrível do início ao fim — me prepararam para cada etapa do processo seletivo."</p>
+      <div class="testimonial-author">
+        <div class="avatar">👩</div>
+        <div>
+          <div class="author-name">Camila Rodrigues</div>
+          <div class="author-role">Analista Financeira · Belém, PA</div>
+        </div>
+      </div>
+    </div>
+    <div class="testimonial-card reveal" style="transition-delay:.1s">
+      <div class="stars">★★★★★</div>
+      <p class="testimonial-text">"Contratamos 8 profissionais pela Emprego OK este ano. O processo foi rápido, os candidatos chegaram bem alinhados ao perfil que pedimos."</p>
+      <div class="testimonial-author">
+        <div class="avatar">👨</div>
+        <div>
+          <div class="author-name">Ricardo Mendes</div>
+          <div class="author-role">Gerente de RH · TechNova</div>
+        </div>
+      </div>
+    </div>
+    <div class="testimonial-card reveal" style="transition-delay:.2s">
+      <div class="stars">★★★★★</div>
+      <p class="testimonial-text">"Estava há 6 meses desempregado. Com a ajuda da equipe e as dicas de entrevista, consegui uma recolocação excelente em 3 semanas."</p>
+      <div class="testimonial-author">
+        <div class="avatar">👨</div>
+        <div>
+          <div class="author-name">Felipe Costa</div>
+          <div class="author-role">Técnico em TI · Ananindeua, PA</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<div class="cta-strip" id="contato">
+  <h2>Pronto para dar o próximo passo na sua carreira?</h2>
+  <div class="cta-strip-actions">
+    <a href="#" class="btn-white">
+      Cadastrar Currículo
+      <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </a>
+    <a href="#" class="btn-outline-white">Falar com Consultor</a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <a href="#" class="nav-logo">Emprego <span class="ok-badge">OK</span></a>
+      <p>Onde empreendedores encontram colaboradores. Atuamos em todo o Norte do Brasil com foco em resultados reais.</p>
+      <div class="footer-socials">
+        <a href="#" class="social-icon">in</a>
+        <a href="#" class="social-icon">𝕏</a>
+        <a href="#" class="social-icon">ig</a>
+        <a href="#" class="social-icon">fb</a>
+      </div>
+    </div>
+    <div class="footer-col">
+      <h4>Para Candidatos</h4>
+      <ul>
+        <li><a href="#">Buscar Vagas</a></li>
+        <li><a href="#">Cadastrar Currículo</a></li>
+        <li><a href="#">Dicas de Carreira</a></li>
+        <li><a href="#">Prepare-se para Entrevistas</a></li>
+        <li><a href="#">Recolocação Profissional</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Para Empresas</h4>
+      <ul>
+        <li><a href="#">Anunciar Vagas</a></li>
+        <li><a href="#">Recrutamento & Seleção</a></li>
+        <li><a href="#">Trabalho Temporário</a></li>
+        <li><a href="#">Headhunting</a></li>
+        <li><a href="#">Terceirização de RH</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Contato</h4>
+      <ul>
+        <li><a href="#">📍 Av. Nazaré, 871 — Belém, PA</a></li>
+        <li><a href="#">📞 (91) 3xxx-xxxx</a></li>
+        <li><a href="#">📧 contato@empregook.com.br</a></li>
+        <li><a href="#">⏰ Seg–Sex: 8h–18h</a></li>
+        <li><a href="#">Política de Privacidade</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2025 Emprego OK. Todos os direitos reservados.</span>
+    <div style="display:flex;gap:1.5rem">
+      <a href="#">Termos de Uso</a>
+      <a href="#">Privacidade</a>
+      <a href="#">Cookies</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Intersection Observer for reveal animations
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(el => {
+      if (el.isIntersecting) {
+        el.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.12 });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // Sticky nav shrink
+  window.addEventListener('scroll', () => {
+    const nav = document.querySelector('nav');
+    nav.style.padding = window.scrollY > 50 ? '.9rem 4rem' : '1.2rem 4rem';
+  });
+</script>
+</body>
+</html>

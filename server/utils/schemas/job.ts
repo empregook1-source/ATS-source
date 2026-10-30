@@ -1,0 +1,70 @@
+import { z } from 'zod'
+
+export { JOB_STATUS_TRANSITIONS } from '~~/shared/status-transitions'
+
+// ─────────────────────────────────────────────
+// Job validation schemas — shared across API routes
+// ─────────────────────────────────────────────
+
+/** Schema for creating a new job */
+export const createJobSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200),
+  companyId: z.string().min(1).optional(),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  type: z.enum(['full_time', 'part_time', 'contract', 'internship']).default('full_time'),
+  /** Optional custom slug — if omitted, generated from title */
+  slug: z.string().max(80).optional(),
+  /** Salary range fields for SEO-rich job postings (Google Jobs) */
+  salaryMin: z.coerce.number().int().min(0).optional(),
+  salaryMax: z.coerce.number().int().min(0).optional(),
+  salaryCurrency: z.string().length(3).optional(),
+  salaryUnit: z.enum(['YEAR', 'MONTH', 'HOUR']).optional(),
+  /** Remote work status: remote, hybrid, or onsite */
+  remoteStatus: z.enum(['remote', 'hybrid', 'onsite']).optional(),
+  /** When this job listing expires (required for Google Jobs rich results) */
+  validThrough: z.coerce.date().optional(),
+  /** Whether the application form requires a resume/CV upload */
+  requireResume: z.boolean().optional().default(false),
+  /** Whether the application form asks for a cover letter upload */
+  requireCoverLetter: z.boolean().optional().default(false),
+  /** Whether to automatically run AI scoring when a candidate applies */
+  autoScoreOnApply: z.boolean().optional().default(false),
+})
+
+/** Schema for updating an existing job (all fields optional, no defaults — PATCH semantics) */
+export const updateJobSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200).optional(),
+  companyId: z.string().min(1).nullish(),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  type: z.enum(['full_time', 'part_time', 'contract', 'internship']).optional(),
+  slug: z.string().max(80).optional(),
+  salaryMin: z.coerce.number().int().min(0).optional(),
+  salaryMax: z.coerce.number().int().min(0).optional(),
+  salaryCurrency: z.string().length(3).optional(),
+  salaryUnit: z.enum(['YEAR', 'MONTH', 'HOUR']).optional(),
+  remoteStatus: z.enum(['remote', 'hybrid', 'onsite']).optional(),
+  validThrough: z.coerce.date().optional(),
+  requireResume: z.boolean().optional(),
+  requireCoverLetter: z.boolean().optional(),
+  autoScoreOnApply: z.boolean().optional(),
+  status: z.enum(['draft', 'open', 'closed', 'archived']).optional(),
+})
+
+/** Schema for job list query params */
+export const jobQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  companyId: z.string().min(1).optional(),
+  status: z.enum(['draft', 'open', 'closed', 'archived']).optional(),
+  search: z.string().min(1).optional(),
+})
+
+/** Reusable schema for `:id` route params */
+export const idParamSchema = z.object({
+  id: z.string().min(1),
+})
+
+// Status transition rules are now in shared/status-transitions.ts
+// and re-exported above for backward compatibility.

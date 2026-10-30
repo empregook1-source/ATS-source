@@ -1,0 +1,96 @@
+import { and, eq } from 'drizzle-orm'
+import { company, job } from '../../database/schema'
+import { createJobSchema } from '../../utils/schemas/job'
+
+export default defineEventHandler(async (event) => {
+  const session = await requirePermission(event, { job: ['create'] })
+  const orgId = session.session.activeOrganizationId
+
+  const body = await readValidatedBody(event, createJobSchema.parse)
+
+  if (body.companyId) {
+    const existingCompany = await db.query.company.findFirst({
+      where: and(eq(company.id, body.companyId), eq(company.organizationId, orgId)),
+      columns: { id: true },
+    })
+    if (!existingCompany) {
+      throw createError({ statusCode: 404, statusMessage: 'Company not found' })
+    }
+  }
+
+  // Generate a deterministic ID upfront so we can build the slug
+  const jobId = crypto.randomUUID()
+  const slug = generateJobSlug(body.title, jobId, body.slug)
+
+  const [created] = await db.insert(job).values({
+    id: jobId,
+    organizationId: orgId,
+    companyId: body.companyId,
+    title: body.title,
+    slug,
+    description: body.description,
+    location: body.location,
+    type: body.type,
+    salaryMin: body.salaryMin,
+    salaryMax: body.salaryMax,
+    salaryCurrency: body.salaryCurrency,
+    salaryUnit: body.salaryUnit,
+    remoteStatus: body.remoteStatus,
+    validThrough: body.validThrough,
+    requireResume: body.requireResume,
+    requireCoverLetter: body.requireCoverLetter,
+    autoScoreOnApply: body.autoScoreOnApply,
+  }).returning({
+    id: job.id,
+    companyId: job.companyId,
+    title: job.title,
+    slug: job.slug,
+    description: job.description,
+    location: job.location,
+    type: job.type,
+    status: job.status,
+    salaryMin: job.salaryMin,
+    salaryMax: job.salaryMax,
+    salaryCurrency: job.salaryCurrency,
+    salaryUnit: job.salaryUnit,
+    remoteStatus: job.remoteStatus,
+    validThrough: job.validThrough,
+    requireResume: job.requireResume,
+    requireCoverLetter: job.requireCoverLetter,
+    autoScoreOnApply: job.autoScoreOnApply,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  })
+
+  if (!created) {
+    throw createError({ statusCode: 500, statusMessage: 'Failed to create job' })
+  }
+
+  recordActivity({
+    organizationId: orgId,
+    actorId: session.user.id,
+    action: 'created',
+    resourceType: 'job',
+    resourceId: created.id,
+    metadata: { title: created.title },
+  })
+
+  trackEvent(event, session, 'job created', {
+    job_id: created.id,
+    job_type: created.type,
+    has_salary: !!(created.salaryMin || created.salaryMax),
+    require_resume: created.requireResume,
+    auto_score: created.autoScoreOnApply,
+  })
+
+  logApiRequest(event, session, 'job.created', {
+    job_id: created.id,
+    job_type: created.type,
+    has_salary: !!(created.salaryMin || created.salaryMax),
+    require_resume: created.requireResume,
+    auto_score: created.autoScoreOnApply,
+  })
+
+  setResponseStatus(event, 201)
+  return created
+})

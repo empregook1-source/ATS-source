@@ -1,0 +1,595 @@
+import { Resend } from 'resend'
+import nodemailer, { type Transporter } from 'nodemailer'
+
+let _resend: Resend | undefined
+let _smtp: Transporter | undefined
+
+/**
+ * Returns a lazily-initialized Resend client.
+ * Returns `null` when RESEND_API_KEY is not configured (dev/testing fallback).
+ */
+function getResendClient(): Resend | null {
+  const apiKey = env.RESEND_API_KEY
+  if (!apiKey) return null
+
+  if (!_resend) {
+    _resend = new Resend(apiKey)
+  }
+  return _resend
+}
+
+/**
+ * Returns a lazily-initialized SMTP transporter.
+ * Returns `null` when SMTP_HOST/SMTP_USER/SMTP_PASS are not all configured.
+ */
+function getSmtpTransport(): Transporter | null {
+  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) return null
+
+  if (!_smtp) {
+    _smtp = nodemailer.createTransport({
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      secure: env.SMTP_PORT === 465,
+      auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+    })
+  }
+  return _smtp
+}
+
+export type EmailProvider = 'smtp' | 'resend'
+
+export function getEmailProvider(): EmailProvider | null {
+  if (getSmtpTransport()) return 'smtp'
+  if (getResendClient()) return 'resend'
+  return null
+}
+
+type OutgoingEmail = {
+  to: string
+  subject: string
+  html: string
+  text: string
+  attachments?: Array<{ filename: string, content: Buffer, contentType: string }>
+  tags?: Array<{ name: string, value: string }>
+}
+
+/**
+ * Send an email via SMTP (preferred) or Resend.
+ * Returns the provider used, or `null` when none is configured (caller logs to console).
+ */
+async function deliverEmail(email: OutgoingEmail): Promise<EmailProvider | null> {
+  const smtp = getSmtpTransport()
+  if (smtp) {
+    await smtp.sendMail({
+      from: env.SMTP_FROM ?? `Emprego OK <${env.SMTP_USER}>`,
+      to: email.to,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+      attachments: email.attachments,
+    })
+    return 'smtp'
+  }
+
+  const resend = getResendClient()
+  if (resend) {
+    const { error } = await resend.emails.send({
+      from: env.RESEND_FROM_EMAIL,
+      to: [email.to],
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+      attachments: email.attachments?.map(a => ({
+        filename: a.filename,
+        content: a.content.toString('base64'),
+        content_type: a.contentType,
+      })),
+      tags: email.tags,
+    })
+    if (error) throw new Error(error.message)
+    return 'resend'
+  }
+
+  return null
+}
+
+/**
+ * Send an organization invitation email via SMTP or Resend.
+ * Falls back to console.info when no provider is configured.
+ */
+export async function sendOrgInvitationEmail(data: {
+  id: string
+  email: string
+  inviter: { user: { name: string; email: string } }
+  organization: { name: string }
+  role: string
+}, inviteLink: string): Promise<void> {
+  if (!getEmailProvider()) {
+    // Dev/test fallback — log invitation link to console
+    console.info(
+      `[Matrix] Invitation email → ${data.email} | ` +
+      `Invited by ${data.inviter.user.name} (${data.inviter.user.email}) | ` +
+      `Org: ${data.organization.name} | ` +
+      `Role: ${data.role} | ` +
+      `Link: ${inviteLink}`,
+    )
+    return
+  }
+
+  let provider: EmailProvider | null
+  try {
+    provider = await deliverEmail({
+      to: data.email,
+      subject: `You're invited to join ${data.organization.name} on Matrix`,
+      html: buildInvitationHtml({
+        inviteeName: data.email,
+        inviterName: data.inviter.user.name,
+        inviterEmail: data.inviter.user.email,
+        organizationName: data.organization.name,
+        role: data.role,
+        inviteLink,
+      }),
+      text: buildInvitationText({
+        inviterName: data.inviter.user.name,
+        organizationName: data.organization.name,
+        role: data.role,
+        inviteLink,
+      }),
+      tags: [
+        { name: 'category', value: 'invitation' },
+        { name: 'organization', value: data.organization.name.slice(0, 256).replace(/[^a-zA-Z0-9_-]/g, '_') },
+      ],
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logError('email.invitation_send_failed', {
+      provider: getEmailProvider(),
+      error_message: message,
+    })
+    throw new Error(`Failed to send invitation email: ${message}`)
+  }
+
+  console.info(`[Matrix] Invitation email sent to ${data.email} via ${provider}`)
+}
+
+// ─────────────────────────────────────────────
+// Email templates
+// ─────────────────────────────────────────────
+
+function buildInvitationHtml(params: {
+  inviteeName: string
+  inviterName: string
+  inviterEmail: string
+  organizationName: string
+  role: string
+  inviteLink: string
+}): string {
+  const { inviterName, organizationName, role, inviteLink } = params
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You're invited to ${escapeHtml(organizationName)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+          <!-- Header -->
+          <tr>
+            <td style="padding:32px 32px 24px;text-align:center;border-bottom:1px solid #f4f4f5;">
+              <h1 style="margin:0;font-size:20px;font-weight:600;color:#09090b;">Matrix</h1>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px;">
+              <h2 style="margin:0 0 16px;font-size:18px;font-weight:600;color:#09090b;">You've been invited</h2>
+              <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#3f3f46;">
+                <strong>${escapeHtml(inviterName)}</strong> has invited you to join
+                <strong>${escapeHtml(organizationName)}</strong> as a <strong>${escapeHtml(role)}</strong>.
+              </p>
+              <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#3f3f46;">
+                Click the button below to accept the invitation. You'll need to sign in or create an account first.
+              </p>
+              <!-- CTA Button -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <a href="${escapeHtml(inviteLink)}" target="_blank" rel="noopener noreferrer"
+                       style="display:inline-block;padding:12px 32px;background-color:#2563eb;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;border-radius:8px;line-height:1;">
+                      Accept Invitation
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#71717a;">
+                This invitation expires in 48 hours. If you didn't expect this email, you can safely ignore it.
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 32px;text-align:center;border-top:1px solid #f4f4f5;background-color:#fafafa;">
+              <p style="margin:0;font-size:12px;color:#a1a1aa;">
+                Sent by Matrix &mdash; Open-source applicant tracking
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}
+
+function buildInvitationText(params: {
+  inviterName: string
+  organizationName: string
+  role: string
+  inviteLink: string
+}): string {
+  return [
+    `You've been invited to join ${params.organizationName}`,
+    '',
+    `${params.inviterName} has invited you to join ${params.organizationName} as a ${params.role}.`,
+    '',
+    'Accept the invitation by visiting the link below:',
+    params.inviteLink,
+    '',
+    'This invitation expires in 48 hours.',
+    'If you didn\'t expect this email, you can safely ignore it.',
+    '',
+    '— Matrix',
+  ].join('\n')
+}
+
+/**
+ * Escape HTML special characters to prevent XSS in email templates.
+ */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+// ─────────────────────────────────────────────
+// Interview invitation emails
+// ─────────────────────────────────────────────
+
+export interface InterviewEmailData {
+  candidateName: string
+  candidateFirstName: string
+  candidateLastName: string
+  candidateEmail: string
+  jobTitle: string
+  interviewTitle: string
+  interviewDate: string
+  interviewTime: string
+  interviewDuration: number
+  interviewType: string
+  interviewLocation: string | null
+  interviewers: string[] | null
+  organizationName: string
+  /** Response URLs for accept/decline/tentative (omitted = no response links) */
+  responseUrls?: {
+    accepted: string
+    declined: string
+    tentative: string
+  }
+  /** iCalendar (.ics) file content to attach */
+  icsContent?: string
+}
+
+/**
+ * Replace {{variable}} placeholders in a template string with actual values.
+ * Only replaces known variables to prevent injection of unexpected content.
+ */
+export function renderTemplate(template: string, data: InterviewEmailData): string {
+  const variables: Record<string, string> = {
+    candidateName: data.candidateName,
+    candidateFirstName: data.candidateFirstName,
+    candidateLastName: data.candidateLastName,
+    candidateEmail: data.candidateEmail,
+    jobTitle: data.jobTitle,
+    interviewTitle: data.interviewTitle,
+    interviewDate: data.interviewDate,
+    interviewTime: data.interviewTime,
+    interviewDuration: String(data.interviewDuration),
+    interviewType: data.interviewType,
+    interviewLocation: data.interviewLocation ?? 'To be confirmed',
+    interviewers: data.interviewers?.join(', ') ?? 'To be confirmed',
+    organizationName: data.organizationName,
+  }
+
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+    return key in variables ? variables[key]! : match
+  })
+}
+
+/**
+ * Send an interview invitation email to a candidate via Resend.
+ * Includes an .ics calendar attachment and response links when provided.
+ * Falls back to console.info when RESEND_API_KEY is not set.
+ */
+export async function sendInterviewInvitationEmail(params: {
+  subject: string
+  body: string
+  data: InterviewEmailData
+}): Promise<void> {
+  const renderedSubject = renderTemplate(params.subject, params.data)
+  const renderedBody = renderTemplate(params.body, params.data)
+
+  if (!getEmailProvider()) {
+    console.info(
+      `[Matrix] Interview invitation email → ${params.data.candidateEmail} | ` +
+      `Subject: ${renderedSubject} | ` +
+      `Interview: ${params.data.interviewTitle} | ` +
+      `Date: ${params.data.interviewDate} at ${params.data.interviewTime}` +
+      (params.data.icsContent ? ' | .ics attached' : '') +
+      (params.data.responseUrls ? ' | response links included' : ''),
+    )
+    return
+  }
+
+  // Build attachments array — include .ics when available
+  const attachments = params.data.icsContent
+    ? [{
+        filename: 'interview.ics',
+        content: Buffer.from(params.data.icsContent),
+        contentType: 'text/calendar; method=REQUEST',
+      }]
+    : undefined
+
+  let provider: EmailProvider | null
+  try {
+    provider = await deliverEmail({
+      to: params.data.candidateEmail,
+      subject: renderedSubject,
+      html: buildInterviewInvitationHtml(renderedSubject, renderedBody, params.data),
+      text: buildInterviewInvitationText(renderedBody, params.data.responseUrls),
+      attachments,
+      tags: [
+        { name: 'category', value: 'interview-invitation' },
+        { name: 'interview', value: params.data.interviewTitle.slice(0, 256).replace(/[^a-zA-Z0-9_-]/g, '_') },
+      ],
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logError('email.interview_invitation_send_failed', {
+      provider: getEmailProvider(),
+      error_message: message,
+    })
+    throw new Error(`Failed to send interview invitation email: ${message}`)
+  }
+
+  console.info(`[Matrix] Interview invitation email sent to ${params.data.candidateEmail} via ${provider}`)
+}
+
+function buildInterviewInvitationHtml(subject: string, bodyText: string, data: InterviewEmailData): string {
+  const bodyHtml = escapeHtml(bodyText).replace(/\n/g, '<br />')
+
+  // Build response buttons HTML when URLs are available
+  const responseButtonsHtml = data.responseUrls
+    ? `
+          <!-- Response Buttons -->
+          <tr>
+            <td style="padding:0 32px 32px;">
+              <div style="border-top:1px solid #e4e4e7;padding-top:24px;">
+                <p style="margin:0 0 16px;font-size:14px;font-weight:600;color:#09090b;text-align:center;">
+                  Can you make it?
+                </p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center">
+                      <table role="presentation" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="padding:0 4px;">
+                            <a href="${escapeHtml(data.responseUrls.accepted)}" target="_blank" rel="noopener noreferrer"
+                               style="display:inline-block;padding:10px 20px;background-color:#16a34a;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;border-radius:6px;line-height:1;">
+                              &#10003; Accept
+                            </a>
+                          </td>
+                          <td style="padding:0 4px;">
+                            <a href="${escapeHtml(data.responseUrls.tentative)}" target="_blank" rel="noopener noreferrer"
+                               style="display:inline-block;padding:10px 20px;background-color:#ca8a04;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;border-radius:6px;line-height:1;">
+                              &#63; Maybe
+                            </a>
+                          </td>
+                          <td style="padding:0 4px;">
+                            <a href="${escapeHtml(data.responseUrls.declined)}" target="_blank" rel="noopener noreferrer"
+                               style="display:inline-block;padding:10px 20px;background-color:#dc2626;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;border-radius:6px;line-height:1;">
+                              &#10005; Decline
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </td>
+          </tr>`
+    : ''
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+          <!-- Header -->
+          <tr>
+            <td style="padding:32px 32px 24px;text-align:center;border-bottom:1px solid #f4f4f5;">
+              <h1 style="margin:0;font-size:20px;font-weight:600;color:#09090b;">${escapeHtml(data.organizationName)}</h1>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px;">
+              <div style="font-size:14px;line-height:1.7;color:#3f3f46;">
+                ${bodyHtml}
+              </div>
+            </td>
+          </tr>${responseButtonsHtml}
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 32px;text-align:center;border-top:1px solid #f4f4f5;background-color:#fafafa;">
+              <p style="margin:0;font-size:12px;color:#a1a1aa;">
+                Sent by ${escapeHtml(data.organizationName)} via Matrix
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}
+
+/**
+ * Build plain-text email body with response links appended.
+ */
+function buildInterviewInvitationText(
+  renderedBody: string,
+  responseUrls?: InterviewEmailData['responseUrls'],
+): string {
+  if (!responseUrls) return renderedBody
+
+  return [
+    renderedBody,
+    '',
+    '─────────────────────────────',
+    'Respond to this invitation:',
+    '',
+    `✓ Accept: ${responseUrls.accepted}`,
+    `? Maybe:  ${responseUrls.tentative}`,
+    `✗ Decline: ${responseUrls.declined}`,
+    '',
+    '─────────────────────────────',
+  ].join('\n')
+}
+
+// ─────────────────────────────────────────────
+// Resume recovery emails
+// ─────────────────────────────────────────────
+
+/**
+ * Send a stored resume PDF back to its owner.
+ * Falls back to console.info when no provider is configured.
+ */
+export async function sendResumeRecoveryEmail(params: {
+  to: string
+  fullName: string
+  pdf: Buffer
+  filename: string
+  builderUrl: string
+}): Promise<void> {
+  if (!getEmailProvider()) {
+    console.info(`[Matrix] Resume recovery email → ${params.to} | Attachment: ${params.filename}`)
+    return
+  }
+
+  const firstName = params.fullName.trim().split(/\s+/)[0] || 'Olá'
+
+  let provider: EmailProvider | null
+  try {
+    provider = await deliverEmail({
+      to: params.to,
+      subject: 'Seu currículo — Emprego OK',
+      html: buildResumeRecoveryHtml(firstName, params.builderUrl),
+      text: [
+        `Olá, ${firstName}!`,
+        '',
+        'Conforme solicitado, seu currículo criado na Emprego OK está em anexo.',
+        `Para atualizá-lo, acesse: ${params.builderUrl}`,
+        '',
+        'Se você não fez este pedido, pode ignorar este e-mail.',
+        '',
+        '— Emprego OK',
+      ].join('\n'),
+      attachments: [{ filename: params.filename, content: params.pdf, contentType: 'application/pdf' }],
+      tags: [{ name: 'category', value: 'resume-recovery' }],
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logError('email.resume_recovery_send_failed', {
+      provider: getEmailProvider(),
+      error_message: message,
+    })
+    throw new Error(`Failed to send resume recovery email: ${message}`)
+  }
+
+  console.info(`[Matrix] Resume recovery email sent via ${provider}`)
+}
+
+function buildResumeRecoveryHtml(firstName: string, builderUrl: string): string {
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seu currículo — Emprego OK</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+          <tr>
+            <td style="padding:32px 32px 24px;text-align:center;border-bottom:1px solid #f4f4f5;">
+              <h1 style="margin:0;font-size:20px;font-weight:600;color:#651689;">Emprego OK</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <h2 style="margin:0 0 16px;font-size:18px;font-weight:600;color:#09090b;">Olá, ${escapeHtml(firstName)}!</h2>
+              <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#3f3f46;">
+                Conforme solicitado, seu currículo criado na Emprego OK está <strong>em anexo</strong> neste e-mail.
+              </p>
+              <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#3f3f46;">
+                Quer atualizar alguma informação? É só criar novamente com o mesmo e-mail: a versão nova substitui a anterior.
+              </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <a href="${escapeHtml(builderUrl)}" target="_blank" rel="noopener noreferrer"
+                       style="display:inline-block;padding:12px 32px;background-color:#6f3ce4;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;border-radius:8px;line-height:1;">
+                      Atualizar meu currículo
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#71717a;">
+                Se você não fez este pedido, pode ignorar este e-mail.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 32px;text-align:center;border-top:1px solid #f4f4f5;background-color:#fafafa;">
+              <p style="margin:0;font-size:12px;color:#a1a1aa;">
+                Enviado por Emprego OK &mdash; empregook.com.br
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}

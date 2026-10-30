@@ -1,0 +1,16 @@
+# EmpregoOk
+
+> Plataforma brasileira de vagas de emprego.
+
+## Sobre
+EmpregoOk conecta candidatos a vagas de emprego no Brasil.
+
+## Páginas importantes
+- /vagas — lista de vagas disponíveis
+- /sobre — sobre a plataforma
+
+## Contato
+- https://empregook.com.br
+
+## Sitemap 
+https://empregook.com.br/sitemap.xml

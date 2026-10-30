@@ -1,0 +1,771 @@
+import {
+  pgTable,
+  text,
+  timestamp,
+  integer,
+  boolean,
+  jsonb,
+  pgEnum,
+  index,
+  uniqueIndex,
+  numeric,
+} from 'drizzle-orm/pg-core'
+import { relations } from 'drizzle-orm'
+import { organization, user } from './auth'
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+export const jobStatusEnum = pgEnum('job_status', ['draft', 'open', 'closed', 'archived'])
+export const jobTypeEnum = pgEnum('job_type', ['full_time', 'part_time', 'contract', 'internship'])
+export const applicationStatusEnum = pgEnum('application_status', [
+  'new', 'screening', 'interview', 'offer', 'hired', 'rejected',
+])
+export const documentTypeEnum = pgEnum('document_type', ['resume', 'cover_letter', 'other'])
+export const questionTypeEnum = pgEnum('question_type', [
+  'short_text', 'long_text', 'single_select', 'multi_select',
+  'number', 'date', 'url', 'checkbox', 'file_upload',
+])
+
+// ─────────────────────────────────────────────
+// ATS Domain Tables — ALL scoped by organizationId
+// ─────────────────────────────────────────────
+
+/**
+ * Companies (clients/employers) within an organization.
+ */
+export const company = pgTable('company', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  address: text('address'),
+  city: text('city'),
+  state: text('state'),
+  phone: text('phone'),
+  email: text('email'),
+  responsibleName: text('responsible_name'),
+  description: text('description'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('company_organization_id_idx').on(t.organizationId),
+]))
+
+/**
+ * Jobs / Positions within an organization.
+ */
+export const job = pgTable('job', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  companyId: text('company_id').references(() => company.id, { onDelete: 'set null' }),
+  title: text('title').notNull(),
+  slug: text('slug').notNull().unique(),
+  description: text('description'),
+  location: text('location'),
+  type: jobTypeEnum('type').notNull().default('full_time'),
+  status: jobStatusEnum('status').notNull().default('draft'),
+  // ── SEO / Rich Results fields ──
+  salaryMin: integer('salary_min'),
+  salaryMax: integer('salary_max'),
+  salaryCurrency: text('salary_currency'),
+  salaryUnit: text('salary_unit'),
+  remoteStatus: text('remote_status'),
+  validThrough: timestamp('valid_through'),
+  // ── Application form settings ──
+  requireResume: boolean('require_resume').notNull().default(false),
+  requireCoverLetter: boolean('require_cover_letter').notNull().default(false),
+  // ── AI scoring settings ──
+  autoScoreOnApply: boolean('auto_score_on_apply').notNull().default(false),
+  // ── Timestamps ──
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('job_organization_id_idx').on(t.organizationId),
+  index('job_company_id_idx').on(t.companyId),
+]))
+
+/**
+ * Candidates (applicants) belonging to a specific tenant.
+ */
+export const candidate = pgTable('candidate', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  firstName: text('first_name').notNull(),
+  lastName: text('last_name').notNull(),
+  email: text('email').notNull(),
+  phone: text('phone'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('candidate_organization_id_idx').on(t.organizationId),
+  uniqueIndex('candidate_org_email_idx').on(t.organizationId, t.email),
+]))
+
+/**
+ * An application links a candidate to a job within the same organization.
+ */
+export const application = pgTable('application', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  candidateId: text('candidate_id').notNull().references(() => candidate.id, { onDelete: 'cascade' }),
+  jobId: text('job_id').notNull().references(() => job.id, { onDelete: 'cascade' }),
+  status: applicationStatusEnum('status').notNull().default('new'),
+  score: integer('score'),
+  notes: text('notes'),
+  coverLetterText: text('cover_letter_text'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('application_organization_id_idx').on(t.organizationId),
+  index('application_candidate_id_idx').on(t.candidateId),
+  index('application_job_id_idx').on(t.jobId),
+  uniqueIndex('application_org_candidate_job_idx').on(t.organizationId, t.candidateId, t.jobId),
+]))
+
+/**
+ * Documents stored in MinIO (resumes, cover letters, etc.).
+ * `storageKey` is the S3 object key in the bucket.
+ * `parsedContent` holds the structured JSON output from PDF parsing.
+ */
+export const document = pgTable('document', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  candidateId: text('candidate_id').notNull().references(() => candidate.id, { onDelete: 'cascade' }),
+  type: documentTypeEnum('type').notNull().default('resume'),
+  storageKey: text('storage_key').notNull().unique(),
+  originalFilename: text('original_filename').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes'),
+  parsedContent: jsonb('parsed_content'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('document_organization_id_idx').on(t.organizationId),
+  index('document_candidate_id_idx').on(t.candidateId),
+]))
+
+// ─────────────────────────────────────────────
+// Custom Application Form Questions
+// ─────────────────────────────────────────────
+
+/**
+ * Custom questions configured by the recruiter for a specific job.
+ * These appear on the public application form alongside the standard fields.
+ * `options` is only used for `single_select` and `multi_select` types.
+ */
+export const jobQuestion = pgTable('job_question', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  jobId: text('job_id').notNull().references(() => job.id, { onDelete: 'cascade' }),
+  type: questionTypeEnum('type').notNull().default('short_text'),
+  label: text('label').notNull(),
+  description: text('description'),
+  required: boolean('required').notNull().default(false),
+  options: jsonb('options').$type<string[]>(),
+  displayOrder: integer('display_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('job_question_organization_id_idx').on(t.organizationId),
+  index('job_question_job_id_idx').on(t.jobId),
+]))
+
+/**
+ * Applicant responses to custom questions, stored per application.
+ * `value` is stored as JSONB to support different response types
+ * (string, string[], number, boolean).
+ */
+export const questionResponse = pgTable('question_response', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  applicationId: text('application_id').notNull().references(() => application.id, { onDelete: 'cascade' }),
+  questionId: text('question_id').notNull().references(() => jobQuestion.id, { onDelete: 'cascade' }),
+  value: jsonb('value').$type<string | string[] | number | boolean>().notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('question_response_organization_id_idx').on(t.organizationId),
+  index('question_response_application_id_idx').on(t.applicationId),
+  index('question_response_question_id_idx').on(t.questionId),
+]))
+
+// ─────────────────────────────────────────────
+// Invite Links & Join Requests
+// ─────────────────────────────────────────────
+
+export const joinRequestStatusEnum = pgEnum('join_request_status', ['pending', 'approved', 'rejected'])
+
+/**
+ * Shareable invite links generated by org owners/admins.
+ * Anyone with the link (and authenticated) can join at the specified role.
+ * `token` is a cryptographic random hex string — NOT the primary key —
+ * to prevent ID enumeration.
+ */
+export const inviteLink = pgTable('invite_link', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  createdById: text('created_by_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  token: text('token').notNull().unique(),
+  role: text('role').notNull().default('member'),
+  maxUses: integer('max_uses'),
+  useCount: integer('use_count').notNull().default(0),
+  expiresAt: timestamp('expires_at').notNull(),
+  revokedAt: timestamp('revoked_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('invite_link_organization_id_idx').on(t.organizationId),
+  index('invite_link_token_idx').on(t.token),
+]))
+
+/**
+ * Join requests submitted by authenticated users wanting to join an org.
+ * Only one pending request per user per org at a time (enforced in API).
+ */
+export const joinRequest = pgTable('join_request', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  message: text('message'),
+  status: joinRequestStatusEnum('status').notNull().default('pending'),
+  reviewedById: text('reviewed_by_id').references(() => user.id),
+  reviewedAt: timestamp('reviewed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('join_request_organization_id_idx').on(t.organizationId),
+  index('join_request_user_id_idx').on(t.userId),
+  index('join_request_status_idx').on(t.status),
+]))
+
+// ─────────────────────────────────────────────
+// Collaboration: Comments
+// ─────────────────────────────────────────────
+
+// ─────────────────────────────────────────────
+// Calendar Integrations
+// ─────────────────────────────────────────────
+
+export const calendarProviderEnum = pgEnum('calendar_provider', ['google'])
+
+/**
+ * Per-user calendar integration credentials.
+ * Tokens are encrypted at rest with AES-256-GCM derived from BETTER_AUTH_SECRET.
+ * Each user can connect one calendar provider. The `calendarId` is the target
+ * calendar for interview events (defaults to 'primary').
+ */
+export const calendarIntegration = pgTable('calendar_integration', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  provider: calendarProviderEnum('provider').notNull().default('google'),
+  /** AES-256-GCM encrypted Google OAuth2 access token */
+  accessTokenEncrypted: text('access_token_encrypted').notNull(),
+  /** AES-256-GCM encrypted Google OAuth2 refresh token */
+  refreshTokenEncrypted: text('refresh_token_encrypted').notNull(),
+  /** Google Calendar ID to create events in (defaults to 'primary') */
+  calendarId: text('calendar_id').notNull().default('primary'),
+  /** Email address of the connected Google account */
+  accountEmail: text('account_email'),
+  /** Google push notification channel ID for two-way sync */
+  webhookChannelId: text('webhook_channel_id'),
+  /** Google push notification resource ID (needed for stop) */
+  webhookResourceId: text('webhook_resource_id'),
+  /** When the webhook channel expires (Google max = 7 days) */
+  webhookExpiration: timestamp('webhook_expiration'),
+  /** Incremental sync token from Google Calendar API */
+  syncToken: text('sync_token'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  uniqueIndex('calendar_integration_user_provider_idx').on(t.userId, t.provider),
+  index('calendar_integration_webhook_channel_idx').on(t.webhookChannelId),
+]))
+
+// ─────────────────────────────────────────────
+// Interviews
+// ─────────────────────────────────────────────
+
+export const interviewTypeEnum = pgEnum('interview_type', [
+  'phone', 'video', 'in_person', 'panel', 'technical', 'take_home',
+])
+
+export const interviewStatusEnum = pgEnum('interview_status', [
+  'scheduled', 'completed', 'cancelled', 'no_show',
+])
+
+export const candidateResponseEnum = pgEnum('candidate_response', [
+  'pending', 'accepted', 'declined', 'tentative',
+])
+
+/**
+ * Interviews scheduled for applications in the pipeline.
+ * Each interview is linked to an application (which contains candidate + job).
+ * Multiple interviews can exist per application (e.g., phone screen → technical → panel).
+ */
+export const interview = pgTable('interview', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  applicationId: text('application_id').notNull().references(() => application.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  type: interviewTypeEnum('type').notNull().default('video'),
+  status: interviewStatusEnum('status').notNull().default('scheduled'),
+  scheduledAt: timestamp('scheduled_at').notNull(),
+  duration: integer('duration').notNull().default(60),
+  location: text('location'),
+  notes: text('notes'),
+  interviewers: jsonb('interviewers').$type<string[]>(),
+  createdById: text('created_by_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  invitationSentAt: timestamp('invitation_sent_at'),
+  candidateResponse: candidateResponseEnum('candidate_response').notNull().default('pending'),
+  candidateRespondedAt: timestamp('candidate_responded_at'),
+  /** Google Calendar event ID for two-way sync (null = not synced) */
+  googleCalendarEventId: text('google_calendar_event_id'),
+  /** Direct link to the Google Calendar event (htmlLink from Google API) */
+  googleCalendarEventLink: text('google_calendar_event_link'),
+  /** IANA timezone for the scheduled time (e.g. 'America/New_York') */
+  timezone: text('timezone').notNull().default('UTC'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('interview_organization_id_idx').on(t.organizationId),
+  index('interview_application_id_idx').on(t.applicationId),
+  index('interview_scheduled_at_idx').on(t.scheduledAt),
+  index('interview_status_idx').on(t.status),
+  index('interview_created_by_id_idx').on(t.createdById),
+]))
+
+// ─────────────────────────────────────────────
+// Email Templates
+// ─────────────────────────────────────────────
+
+/**
+ * Reusable email templates for interview invitations.
+ * Each org can create custom templates or use the system defaults.
+ * Template body supports placeholder variables like {{candidateName}}, {{jobTitle}}, etc.
+ */
+export const emailTemplate = pgTable('email_template', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  createdById: text('created_by_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('email_template_organization_id_idx').on(t.organizationId),
+  index('email_template_created_by_id_idx').on(t.createdById),
+]))
+
+export const commentTargetEnum = pgEnum('comment_target', ['candidate', 'application', 'job'])
+
+/**
+ * Internal comments left by team members on candidates, applications, or jobs.
+ * Scoped by organizationId for tenant isolation.
+ */
+export const comment = pgTable('comment', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  authorId: text('author_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  targetType: commentTargetEnum('target_type').notNull(),
+  targetId: text('target_id').notNull(),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('comment_organization_id_idx').on(t.organizationId),
+  index('comment_target_idx').on(t.targetType, t.targetId),
+  index('comment_author_id_idx').on(t.authorId),
+]))
+
+// ─────────────────────────────────────────────
+// Collaboration: Activity Log
+// ─────────────────────────────────────────────
+
+export const activityActionEnum = pgEnum('activity_action', [
+  'created', 'updated', 'deleted', 'status_changed',
+  'comment_added', 'member_invited', 'member_removed', 'member_role_changed',
+  'scored',
+])
+
+// ─────────────────────────────────────────────
+// AI Scoring Enums
+// ─────────────────────────────────────────────
+
+export const criterionCategoryEnum = pgEnum('criterion_category', [
+  'technical', 'experience', 'soft_skills', 'education', 'culture', 'custom',
+])
+
+export const analysisRunStatusEnum = pgEnum('analysis_run_status', [
+  'completed', 'failed', 'partial',
+])
+
+/**
+ * Immutable audit trail for all significant actions within an organization.
+ * Append-only — no UPDATE or DELETE allowed via the API.
+ */
+export const activityLog = pgTable('activity_log', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  actorId: text('actor_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  action: activityActionEnum('action').notNull(),
+  resourceType: text('resource_type').notNull(),
+  resourceId: text('resource_id').notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('activity_log_organization_id_idx').on(t.organizationId),
+  index('activity_log_actor_id_idx').on(t.actorId),
+  index('activity_log_resource_idx').on(t.resourceType, t.resourceId),
+  index('activity_log_created_at_idx').on(t.createdAt),
+]))
+
+// ─────────────────────────────────────────────
+// Source Tracking
+// ─────────────────────────────────────────────
+
+/**
+ * Well-known source identifiers for major job boards and channels.
+ * `custom` allows organizations to create their own named sources.
+ */
+export const sourceChannelEnum = pgEnum('source_channel', [
+  'linkedin', 'indeed', 'glassdoor', 'ziprecruiter', 'monster',
+  'handshake', 'angellist', 'wellfound', 'dice', 'stackoverflow',
+  'weworkremotely', 'remoteok', 'builtin', 'hired', 'lever',
+  'greenhouse_board', 'google_jobs', 'facebook', 'twitter', 'instagram',
+  'tiktok', 'reddit', 'referral', 'career_site', 'email',
+  'event', 'agency', 'direct', 'other', 'custom',
+])
+
+/**
+ * Tracking links generated by recruiters to attribute candidate sources.
+ * Each link produces a unique campaign code appended as `?ref=CODE` to the
+ * public job page or global careers page. When a candidate applies through
+ * a tracked link, the application records the source.
+ */
+export const trackingLink = pgTable('tracking_link', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  /** Optional — links may be org-wide (null) or scoped to a single job */
+  jobId: text('job_id').references(() => job.id, { onDelete: 'cascade' }),
+  /** Canonical source channel */
+  channel: sourceChannelEnum('channel').notNull().default('custom'),
+  /** Human-readable label, e.g. "LinkedIn Spring Campaign" */
+  name: text('name').notNull(),
+  /** Unique short code used in ?ref=CODE — generated from crypto */
+  code: text('code').notNull().unique(),
+  /** Standard UTM parameters captured for external analytics */
+  utmSource: text('utm_source'),
+  utmMedium: text('utm_medium'),
+  utmCampaign: text('utm_campaign'),
+  utmTerm: text('utm_term'),
+  utmContent: text('utm_content'),
+  /** Aggregate counters (incremented on each click/application) */
+  clickCount: integer('click_count').notNull().default(0),
+  applicationCount: integer('application_count').notNull().default(0),
+  /** Soft-disabled — deactivated links stop incrementing counts */
+  isActive: boolean('is_active').notNull().default(true),
+  createdById: text('created_by_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('tracking_link_organization_id_idx').on(t.organizationId),
+  index('tracking_link_job_id_idx').on(t.jobId),
+  index('tracking_link_code_idx').on(t.code),
+  index('tracking_link_channel_idx').on(t.channel),
+]))
+
+/**
+ * Per-application source attribution — records HOW a candidate discovered
+ * and applied to a job. One row per application. Populated at apply time
+ * from ?ref=, ?utm_*, or Referer header.
+ */
+export const applicationSource = pgTable('application_source', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  applicationId: text('application_id').notNull().references(() => application.id, { onDelete: 'cascade' }),
+  /** Resolved channel — normalized from tracking link, UTM, or Referer */
+  channel: sourceChannelEnum('channel').notNull().default('direct'),
+  /** FK to tracking_link if the application came via a tracked link */
+  trackingLinkId: text('tracking_link_id').references(() => trackingLink.id, { onDelete: 'set null' }),
+  /** Raw UTM query params captured from the application URL */
+  utmSource: text('utm_source'),
+  utmMedium: text('utm_medium'),
+  utmCampaign: text('utm_campaign'),
+  utmTerm: text('utm_term'),
+  utmContent: text('utm_content'),
+  /** Cleaned Referer header (domain only — no path/query for privacy) */
+  referrerDomain: text('referrer_domain'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('application_source_organization_id_idx').on(t.organizationId),
+  index('application_source_application_id_idx').on(t.applicationId),
+  index('application_source_channel_idx').on(t.channel),
+  index('application_source_tracking_link_id_idx').on(t.trackingLinkId),
+  uniqueIndex('application_source_application_idx').on(t.applicationId),
+]))
+
+export const resumeCreation = pgTable('resume_creation', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  returnTo: text('return_to'),
+  jobSlug: text('job_slug'),
+  referrer: text('referrer'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('resume_creation_created_at_idx').on(t.createdAt),
+  index('resume_creation_job_slug_idx').on(t.jobSlug),
+]))
+
+/**
+ * Resumes stored by the public resume builder. A row only exists when the
+ * person opted in to storage/marketing; the PDF itself lives in S3 at `pdfKey`.
+ * Not scoped to an organization — visible only to the platform owner.
+ */
+export const resumeSubmission = pgTable('resume_submission', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  fullName: text('full_name').notNull(),
+  email: text('email').notNull(),
+  phone: text('phone'),
+  city: text('city'),
+  pdfKey: text('pdf_key').notNull(),
+  termsVersion: text('terms_version').notNull(),
+  marketingConsent: boolean('marketing_consent').notNull().default(true),
+  consentAt: timestamp('consent_at').notNull().defaultNow(),
+  consentRevokedAt: timestamp('consent_revoked_at'),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  jobSlug: text('job_slug'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('resume_submission_created_at_idx').on(t.createdAt),
+  index('resume_submission_email_idx').on(t.email),
+]))
+
+// ─────────────────────────────────────────────
+// AI Configuration & Scoring Tables
+// ─────────────────────────────────────────────
+
+/**
+ * Per-organization AI provider configuration.
+ * API keys are encrypted at rest using AES-256-GCM (same as calendar tokens).
+ * Each org can configure their own provider, model, and API key.
+ */
+export const aiConfig = pgTable('ai_config', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull().default('openai'),
+  model: text('model').notNull().default('gpt-4o-mini'),
+  /** AES-256-GCM encrypted API key — NEVER returned to client */
+  apiKeyEncrypted: text('api_key_encrypted').notNull(),
+  /** Optional base URL override (e.g. for Ollama or custom endpoints) */
+  baseUrl: text('base_url'),
+  maxTokens: integer('max_tokens').notNull().default(4096),
+  /** Price per 1M input tokens in USD (e.g. "2.50") */
+  inputPricePer1m: numeric('input_price_per_1m', { precision: 10, scale: 4 }),
+  /** Price per 1M output tokens in USD (e.g. "10.00") */
+  outputPricePer1m: numeric('output_price_per_1m', { precision: 10, scale: 4 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  uniqueIndex('ai_config_organization_id_idx').on(t.organizationId),
+]))
+
+/**
+ * Per-job scoring criteria. Each criterion defines one dimension of evaluation.
+ * Weights are user-adjustable via sliders and used to compute weighted composite scores.
+ */
+export const scoringCriterion = pgTable('scoring_criterion', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  jobId: text('job_id').notNull().references(() => job.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  category: criterionCategoryEnum('category').notNull().default('custom'),
+  maxScore: integer('max_score').notNull().default(10),
+  /** Weight from 0–100, used by sliders. Default 50 = neutral. */
+  weight: integer('weight').notNull().default(50),
+  displayOrder: integer('display_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ([
+  index('scoring_criterion_organization_id_idx').on(t.organizationId),
+  index('scoring_criterion_job_id_idx').on(t.jobId),
+  uniqueIndex('scoring_criterion_job_key_idx').on(t.jobId, t.key),
+]))
+
+/**
+ * Individual criterion scores computed by AI for each application.
+ * Stores the raw AI output including evidence and confidence.
+ */
+export const criterionScore = pgTable('criterion_score', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  applicationId: text('application_id').notNull().references(() => application.id, { onDelete: 'cascade' }),
+  criterionKey: text('criterion_key').notNull(),
+  maxScore: integer('max_score').notNull(),
+  applicantScore: integer('applicant_score').notNull(),
+  /** Confidence from 0 to 100 (%). */
+  confidence: integer('confidence').notNull(),
+  evidence: text('evidence').notNull(),
+  strengths: jsonb('strengths').$type<string[]>(),
+  gaps: jsonb('gaps').$type<string[]>(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('criterion_score_organization_id_idx').on(t.organizationId),
+  index('criterion_score_application_id_idx').on(t.applicationId),
+  uniqueIndex('criterion_score_app_criterion_idx').on(t.applicationId, t.criterionKey),
+]))
+
+/**
+ * Audit trail for each AI scoring run. Captures the rubric snapshot,
+ * model used, token usage, and the raw LLM response for debugging.
+ */
+export const analysisRun = pgTable('analysis_run', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text('organization_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+  applicationId: text('application_id').notNull().references(() => application.id, { onDelete: 'cascade' }),
+  status: analysisRunStatusEnum('status').notNull().default('completed'),
+  /** Provider + model used for this run */
+  provider: text('provider').notNull(),
+  model: text('model').notNull(),
+  /** Snapshot of criteria at score time for audit trail */
+  criteriaSnapshot: jsonb('criteria_snapshot').$type<Record<string, unknown>[]>(),
+  /** Composite weighted score (0–100) */
+  compositeScore: integer('composite_score'),
+  /** Token usage for cost tracking */
+  promptTokens: integer('prompt_tokens'),
+  completionTokens: integer('completion_tokens'),
+  /** Raw LLM response for debugging (sanitized — no PII stored) */
+  rawResponse: jsonb('raw_response'),
+  errorMessage: text('error_message'),
+  scoredById: text('scored_by_id').references(() => user.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (t) => ([
+  index('analysis_run_organization_id_idx').on(t.organizationId),
+  index('analysis_run_application_id_idx').on(t.applicationId),
+  index('analysis_run_created_at_idx').on(t.createdAt),
+]))
+
+// ─────────────────────────────────────────────
+// Relations
+// ─────────────────────────────────────────────
+
+export const jobRelations = relations(job, ({ one, many }) => ({
+  organization: one(organization, { fields: [job.organizationId], references: [organization.id] }),
+  company: one(company, { fields: [job.companyId], references: [company.id] }),
+  applications: many(application),
+  questions: many(jobQuestion),
+  scoringCriteria: many(scoringCriterion),
+  trackingLinks: many(trackingLink),
+}))
+
+export const companyRelations = relations(company, ({ one, many }) => ({
+  organization: one(organization, { fields: [company.organizationId], references: [organization.id] }),
+  jobs: many(job),
+}))
+
+export const candidateRelations = relations(candidate, ({ one, many }) => ({
+  organization: one(organization, { fields: [candidate.organizationId], references: [organization.id] }),
+  applications: many(application),
+  documents: many(document),
+}))
+
+export const applicationRelations = relations(application, ({ one, many }) => ({
+  organization: one(organization, { fields: [application.organizationId], references: [organization.id] }),
+  candidate: one(candidate, { fields: [application.candidateId], references: [candidate.id] }),
+  job: one(job, { fields: [application.jobId], references: [job.id] }),
+  responses: many(questionResponse),
+  interviews: many(interview),
+  criterionScores: many(criterionScore),
+  analysisRuns: many(analysisRun),
+  source: one(applicationSource),
+}))
+
+export const documentRelations = relations(document, ({ one }) => ({
+  organization: one(organization, { fields: [document.organizationId], references: [organization.id] }),
+  candidate: one(candidate, { fields: [document.candidateId], references: [candidate.id] }),
+}))
+
+export const jobQuestionRelations = relations(jobQuestion, ({ one }) => ({
+  organization: one(organization, { fields: [jobQuestion.organizationId], references: [organization.id] }),
+  job: one(job, { fields: [jobQuestion.jobId], references: [job.id] }),
+}))
+
+export const questionResponseRelations = relations(questionResponse, ({ one }) => ({
+  organization: one(organization, { fields: [questionResponse.organizationId], references: [organization.id] }),
+  application: one(application, { fields: [questionResponse.applicationId], references: [application.id] }),
+  question: one(jobQuestion, { fields: [questionResponse.questionId], references: [jobQuestion.id] }),
+}))
+
+export const commentRelations = relations(comment, ({ one }) => ({
+  organization: one(organization, { fields: [comment.organizationId], references: [organization.id] }),
+  author: one(user, { fields: [comment.authorId], references: [user.id] }),
+}))
+
+export const activityLogRelations = relations(activityLog, ({ one }) => ({
+  organization: one(organization, { fields: [activityLog.organizationId], references: [organization.id] }),
+  actor: one(user, { fields: [activityLog.actorId], references: [user.id] }),
+}))
+
+export const inviteLinkRelations = relations(inviteLink, ({ one }) => ({
+  organization: one(organization, { fields: [inviteLink.organizationId], references: [organization.id] }),
+  createdBy: one(user, { fields: [inviteLink.createdById], references: [user.id] }),
+}))
+
+export const joinRequestRelations = relations(joinRequest, ({ one }) => ({
+  user: one(user, { fields: [joinRequest.userId], references: [user.id] }),
+  organization: one(organization, { fields: [joinRequest.organizationId], references: [organization.id] }),
+  reviewedBy: one(user, { fields: [joinRequest.reviewedById], references: [user.id] }),
+}))
+
+export const interviewRelations = relations(interview, ({ one }) => ({
+  organization: one(organization, { fields: [interview.organizationId], references: [organization.id] }),
+  application: one(application, { fields: [interview.applicationId], references: [application.id] }),
+  createdBy: one(user, { fields: [interview.createdById], references: [user.id] }),
+}))
+
+export const emailTemplateRelations = relations(emailTemplate, ({ one }) => ({
+  organization: one(organization, { fields: [emailTemplate.organizationId], references: [organization.id] }),
+  createdBy: one(user, { fields: [emailTemplate.createdById], references: [user.id] }),
+}))
+
+export const calendarIntegrationRelations = relations(calendarIntegration, ({ one }) => ({
+  user: one(user, { fields: [calendarIntegration.userId], references: [user.id] }),
+}))
+
+// ─── AI Scoring Relations ──────────────────────────────────────────
+
+export const aiConfigRelations = relations(aiConfig, ({ one }) => ({
+  organization: one(organization, { fields: [aiConfig.organizationId], references: [organization.id] }),
+}))
+
+export const scoringCriterionRelations = relations(scoringCriterion, ({ one }) => ({
+  organization: one(organization, { fields: [scoringCriterion.organizationId], references: [organization.id] }),
+  job: one(job, { fields: [scoringCriterion.jobId], references: [job.id] }),
+}))
+
+export const criterionScoreRelations = relations(criterionScore, ({ one }) => ({
+  organization: one(organization, { fields: [criterionScore.organizationId], references: [organization.id] }),
+  application: one(application, { fields: [criterionScore.applicationId], references: [application.id] }),
+}))
+
+export const analysisRunRelations = relations(analysisRun, ({ one }) => ({
+  organization: one(organization, { fields: [analysisRun.organizationId], references: [organization.id] }),
+  application: one(application, { fields: [analysisRun.applicationId], references: [application.id] }),
+  scoredBy: one(user, { fields: [analysisRun.scoredById], references: [user.id] }),
+}))
+
+// ─── Source Tracking Relations ─────────────────────────────────────
+
+export const trackingLinkRelations = relations(trackingLink, ({ one, many }) => ({
+  organization: one(organization, { fields: [trackingLink.organizationId], references: [organization.id] }),
+  job: one(job, { fields: [trackingLink.jobId], references: [job.id] }),
+  createdBy: one(user, { fields: [trackingLink.createdById], references: [user.id] }),
+  applicationSources: many(applicationSource),
+}))
+
+export const applicationSourceRelations = relations(applicationSource, ({ one }) => ({
+  organization: one(organization, { fields: [applicationSource.organizationId], references: [organization.id] }),
+  application: one(application, { fields: [applicationSource.applicationId], references: [application.id] }),
+  trackingLink: one(trackingLink, { fields: [applicationSource.trackingLinkId], references: [trackingLink.id] }),
+}))
